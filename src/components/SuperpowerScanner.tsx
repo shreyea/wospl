@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { siteData } from "@/data/siteData";
+import { siteData } from "../data/siteData";
 
 interface SuperpowerScannerProps {
   superpowers?: typeof siteData.superpowers;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { siteData } from "@/data/siteData";
+import { siteData } from "../data/siteData";
 
 /* Confetti hearts */
 function ConfettiHearts({ active }: { active: boolean }) {

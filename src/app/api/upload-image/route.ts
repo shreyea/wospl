@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "../../../lib/supabaseServer";
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 const MAX_IMAGES = 3;

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { siteData } from "@/data/siteData";
+import { siteData } from "../data/siteData";
 
 function StatCard({
   stat,

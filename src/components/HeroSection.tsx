@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { siteData } from "@/data/siteData";
+import { siteData } from "../data/siteData";
 
 /* Cursor heart trail */
 function HeartTrail() {

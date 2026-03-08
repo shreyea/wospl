@@ -3,26 +3,26 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-const HeroSection = dynamic(() => import("@/components/HeroSection"), {
+const HeroSection = dynamic(() => import("../components/HeroSection"), {
   ssr: false,
 });
-const ImpactStats = dynamic(() => import("@/components/ImpactStats"), {
+const ImpactStats = dynamic(() => import("../components/ImpactStats"), {
   ssr: false,
 });
 const SuperpowerScanner = dynamic(
-  () => import("@/components/SuperpowerScanner"),
+  () => import("../components/SuperpowerScanner"),
   { ssr: false }
 );
 const MemoryGenerator = dynamic(
-  () => import("@/components/MemoryGenerator"),
+  () => import("../components/MemoryGenerator"),
   { ssr: false }
 );
 const AppreciationMeter = dynamic(
-  () => import("@/components/AppreciationMeter"),
+  () => import("../components/AppreciationMeter"),
   { ssr: false }
 );
 const FinalCelebration = dynamic(
-  () => import("@/components/FinalCelebration"),
+  () => import("../components/FinalCelebration"),
   { ssr: false }
 );
 

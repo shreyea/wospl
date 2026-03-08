@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { siteData } from "@/data/siteData";
+import { siteData } from "../data/siteData";
 
 interface AppreciationMeterProps {
   appreciationResult?: string;

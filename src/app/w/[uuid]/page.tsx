@@ -1,5 +1,5 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
-import type { TemplateData } from "@/lib/types";
+import { getSupabaseServer } from "../../../lib/supabaseServer";
+import type { TemplateData } from "../../../lib/types";
 import { notFound } from "next/navigation";
 import ShareableTemplate from "./ShareableTemplate";
 

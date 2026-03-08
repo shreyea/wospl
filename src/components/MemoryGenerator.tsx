@@ -2,8 +2,8 @@
 
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { siteData } from "@/data/siteData";
-import type { TemplateMemory } from "@/lib/types";
+import { siteData } from "../data/siteData";
+import type { TemplateMemory } from "../lib/types";
 
 interface MemoryGeneratorProps {
   memories?: TemplateMemory[];
