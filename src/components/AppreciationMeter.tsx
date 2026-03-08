@@ -70,7 +70,7 @@ export default function AppreciationMeter(props: AppreciationMeterProps) {
         {floaters.map((f) => (
           <motion.div
             key={f.id}
-            className="absolute pointer-events-none z-[5]"
+            className="absolute pointer-events-none z-10"
             style={{ left: `${f.x}%`, top: `${f.y}%`, fontSize: f.size }}
             initial={{ opacity: 0, scale: 0 }}
             animate={{

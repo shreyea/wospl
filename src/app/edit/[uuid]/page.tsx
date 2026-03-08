@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { TemplateData } from "../../../lib/types";
 
@@ -16,13 +16,7 @@ export default function EditorPage() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [shareLink, setShareLink] = useState("");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [autoSaving, setAutoSaving] = useState(false);
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
-  const [successAnimation, setSuccessAnimation] = useState(false);
-  
-  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
-  const lastSavedData = useRef<TemplateData | null>(null);
+  const [errors] = useState<Record<string, string>>({});
 
   const getCredentials = useCallback(() => {
     const email = sessionStorage.getItem("owner_email");
@@ -30,107 +24,6 @@ export default function EditorPage() {
     const storedUuid = sessionStorage.getItem("template_uuid");
     return { email, template_code, storedUuid };
   }, []);
-
-  // Auto-save functionality
-  const performAutoSave = useCallback(async () => {
-    const { email, template_code } = getCredentials();
-    if (!email || !template_code || !data || !hasUnsavedChanges) return;
-
-    setAutoSaving(true);
-    try {
-      const res = await fetch("/api/template/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uuid, email, template_code, data }),
-      });
-
-      if (res.ok) {
-        setHasUnsavedChanges(false);
-        lastSavedData.current = JSON.parse(JSON.stringify(data));
-        setMessage("✓ Auto-saved");
-        setTimeout(() => setMessage(""), 2000);
-      }
-    } catch (error) {
-      console.error("Auto-save failed:", error);
-    } finally {
-      setAutoSaving(false);
-    }
-  }, [uuid, data, hasUnsavedChanges, getCredentials]);
-
-  // Cleanup function
-  const cleanup = useCallback(() => {
-    if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = null;
-    }
-  }, []);
-
-  // Validation function
-  const validateData = useCallback((templateData: TemplateData): {[key: string]: string} => {
-    const newErrors: {[key: string]: string} = {};
-    
-    if (!templateData.herName.trim()) {
-      newErrors.herName = "Name is required";
-    }
-    if (!templateData.heroHeadline.trim()) {
-      newErrors.heroHeadline = "Headline is required";
-    }
-    if (!templateData.heroSubtext.trim()) {
-      newErrors.heroSubtext = "Subtitle is required";
-    }
-    
-    templateData.stats.forEach((stat, index) => {
-      if (!stat.label.trim()) {
-        newErrors[`stat_${index}_label`] = "Label is required";
-      }
-      if (stat.value <= 0) {
-        newErrors[`stat_${index}_value`] = "Value must be greater than 0";
-      }
-    });
-
-    templateData.superpowers.forEach((power, index) => {
-      if (!power.text.trim()) {
-        newErrors[`power_${index}_text`] = "Superpower text is required";
-      }
-    });
-
-    templateData.memories.forEach((memory, index) => {
-      if (!memory.text.trim()) {
-        newErrors[`memory_${index}_text`] = "Memory text is required";
-      }
-    });
-
-    return newErrors;
-  }, []);
-
-  // Auto-save timer effect
-  useEffect(() => {
-    if (hasUnsavedChanges && data) {
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
-      }
-      autoSaveTimer.current = setTimeout(() => {
-        performAutoSave();
-      }, 3000); // Auto-save after 3 seconds of inactivity
-    }
-
-    return cleanup;
-  }, [hasUnsavedChanges, data, performAutoSave, cleanup]);
-
-  // Cleanup on component unmount
-  useEffect(() => {
-    return cleanup;
-  }, [cleanup]);
-
-
-
-  // Validate data whenever it changes
-  useEffect(() => {
-    if (data) {
-      const newErrors = validateData(data);
-      setErrors(newErrors);
-    }
-  }, [data, validateData]);
 
   useEffect(() => {
     const { email, template_code, storedUuid } = getCredentials();
@@ -141,24 +34,17 @@ export default function EditorPage() {
     }
 
     const fetchTemplate = async () => {
-      const abortController = new AbortController();
-      
       try {
         const res = await fetch("/api/template/fetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uuid, email, template_code }),
-          signal: abortController.signal,
         });
 
         const result = await res.json();
 
         if (!res.ok) {
-          if (res.status === 401 || res.status === 403) {
-            router.push("/login");
-          } else {
-            setMessage("⚠️ Failed to load template. Please try again.");
-          }
+          router.push("/login");
           return;
         }
 
@@ -173,50 +59,28 @@ export default function EditorPage() {
             heroPhotos: siteData.heroPhotos,
             stats: siteData.stats,
             superpowers: siteData.superpowers,
-            memories: siteData.memories.slice(0, 3), // Limit to 3 memories
-            appreciationResult: siteData.appreciationResult,
-            finalMessage: siteData.finalMessage,
-            personalNote: siteData.personalNote,
-          });
-          lastSavedData.current = {
-            herName: siteData.herName,
-            heroHeadline: siteData.heroHeadline,
-            heroSubtext: siteData.heroSubtext,
-            heroLoading: siteData.heroLoading,
-            heroPhotos: siteData.heroPhotos,
-            stats: siteData.stats,
-            superpowers: siteData.superpowers,
             memories: siteData.memories.slice(0, 3),
             appreciationResult: siteData.appreciationResult,
             finalMessage: siteData.finalMessage,
             personalNote: siteData.personalNote,
-          };
+          });
         } else {
           const templateData = result.data as TemplateData;
-          // Ensure existing templates also have max 3 memories
           templateData.memories = templateData.memories.slice(0, 3);
-          // Clean up any stale local photo paths (e.g., "/memories/memory-1.jpg")
-          // Only keep URLs that start with "http" (Supabase public URLs)
           templateData.memories = templateData.memories.map(m => ({
             ...m,
             photo: m.photo && m.photo.startsWith("http") ? m.photo : "",
           }));
           setData(templateData);
-          lastSavedData.current = JSON.parse(JSON.stringify(templateData));
         }
         if (result.is_published) {
           setShareLink(`${window.location.origin}/w/${uuid}`);
         }
-      } catch (error: any) {
-        if (error.name !== 'AbortError') {
-          console.error("Failed to fetch template:", error);
-          setMessage("⚠️ Network error. Please check your connection and try again.");
-        }
+      } catch (error) {
+        setMessage("Failed to load template.");
       } finally {
         setLoading(false);
       }
-      
-      return () => abortController.abort();
     };
 
     fetchTemplate();
@@ -226,21 +90,8 @@ export default function EditorPage() {
     const { email, template_code } = getCredentials();
     if (!email || !template_code || !data) return;
 
-    // Check for validation errors
-    const validationErrors = validateData(data);
-    if (Object.keys(validationErrors).length > 0) {
-      setMessage("Please fix the errors before saving.");
-      return;
-    }
-
     setSaving(true);
     setMessage("");
-
-    // Log what we're saving so we can verify image URLs are included
-    console.log("[save] Saving template data. Memories:", data.memories.map(m => ({
-      text: m.text.substring(0, 30),
-      photo: m.photo || "(none)",
-    })));
 
     try {
       const res = await fetch("/api/template/update", {
@@ -250,25 +101,17 @@ export default function EditorPage() {
       });
 
       const result = await res.json();
-      console.log("[save] Response:", res.status, result);
       
       if (res.ok) {
-        setHasUnsavedChanges(false);
-        lastSavedData.current = JSON.parse(JSON.stringify(data));
-        setSuccessAnimation(true);
-        setMessage("✅ Saved successfully!");
-        setTimeout(() => {
-          setSuccessAnimation(false);
-          setMessage("");
-        }, 3000);
+        setMessage("Saved successfully!");
       } else {
-        setMessage(result.error);
+        setMessage(result.error || "Failed to save");
       }
     } catch (err) {
-      console.error("[save] Exception:", err);
       setMessage("Failed to save.");
     } finally {
       setSaving(false);
+      setTimeout(() => setMessage(""), 3000);
     }
   };
 
@@ -289,14 +132,15 @@ export default function EditorPage() {
       const result = await res.json();
       if (res.ok) {
         setShareLink(`${window.location.origin}${result.shareLink}`);
-        setMessage("Published! Share link generated.");
+        setMessage("Published successfully!");
       } else {
-        setMessage(result.error);
+        setMessage(result.error || "Failed to publish");
       }
     } catch {
       setMessage("Failed to publish.");
     } finally {
       setPublishing(false);
+      setTimeout(() => setMessage(""), 3000);
     }
   };
 
@@ -307,17 +151,8 @@ export default function EditorPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    console.log("[upload] File selected:", file.name, file.type, file.size);
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setMessage("⚠️ Please select a valid image file.");
-      return;
-    }
-
-    // Validate file size (1MB limit)
     if (file.size > 1 * 1024 * 1024) {
-      setMessage("⚠️ Image must be under 1MB. Please compress or choose a smaller image.");
+      setMessage("Image must be under 1MB.");
       return;
     }
 
@@ -336,14 +171,12 @@ export default function EditorPage() {
       formData.append("template_code", template_code);
       formData.append("image_count", String(currentImageCount));
 
-      console.log("[upload] Sending to /api/upload-image...");
       const res = await fetch("/api/upload-image", {
         method: "POST",
         body: formData,
       });
 
       const result = await res.json();
-      console.log("[upload] Response:", res.status, result);
 
       if (res.ok && result.url) {
         const updated = { ...data };
@@ -353,23 +186,15 @@ export default function EditorPage() {
           photo: result.url,
         };
         setData(updated);
-        setHasUnsavedChanges(true);
-        setMessage("✅ Image uploaded successfully!");
-        console.log("[upload] Image URL stored in memory:", result.url);
+        setMessage("Image uploaded successfully!");
       } else {
-        const errorMsg = result.error || "Upload failed. Please try again.";
-        setMessage(`⚠️ ${errorMsg}`);
-        console.error("[upload] Error:", result.error);
+        setMessage(result.error || "Upload failed.");
       }
-    } catch (err: any) {
-      console.error("[upload] Exception:", err);
-      const errorMessage = err.name === 'AbortError' 
-        ? "Upload was cancelled." 
-        : "Network error during upload. Please check your connection and try again.";
-      setMessage(`⚠️ ${errorMessage}`);
+    } catch (err) {
+      setMessage("Failed to upload image.");
     } finally {
       setUploading(false);
-      // Clear the file input
+      setTimeout(() => setMessage(""), 3000);
       e.target.value = '';
     }
   };
@@ -377,9 +202,7 @@ export default function EditorPage() {
   // Update helpers
   const updateField = (field: keyof TemplateData, value: string) => {
     if (!data) return;
-    const newData = { ...data, [field]: value };
-    setData(newData);
-    setHasUnsavedChanges(true);
+    setData({ ...data, [field]: value });
   };
 
   const updateStat = (
@@ -390,60 +213,27 @@ export default function EditorPage() {
     if (!data) return;
     const stats = [...data.stats];
     stats[index] = { ...stats[index], [field]: value };
-    const newData = { ...data, stats };
-    setData(newData);
-    setHasUnsavedChanges(true);
+    setData({ ...data, stats });
   };
 
   const updateSuperpower = (index: number, field: 'text' | 'icon', value: string) => {
     if (!data) return;
     const superpowers = [...data.superpowers];
     superpowers[index] = { ...superpowers[index], [field]: value };
-    const newData = { ...data, superpowers };
-    setData(newData);
-    setHasUnsavedChanges(true);
+    setData({ ...data, superpowers });
   };
 
   const updateMemoryText = (index: number, value: string) => {
     if (!data) return;
     const memories = [...data.memories];
     memories[index] = { ...memories[index], text: value };
-    const newData = { ...data, memories };
-    setData(newData);
-    setHasUnsavedChanges(true);
+    setData({ ...data, memories });
   };
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+S or Ctrl+S to save
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        if (!saving && Object.keys(errors).length === 0) {
-          handleSave();
-        }
-      }
-      
-      // Cmd+Enter or Ctrl+Enter to publish
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        if (!publishing && !hasUnsavedChanges && Object.keys(errors).length === 0) {
-          handlePublish();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saving, publishing, hasUnsavedChanges, errors]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-pink-50 via-white to-purple-50">
-        <div className="text-center" role="status" aria-live="polite">
-          <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-600 text-lg">Loading editor...</p>
-        </div>
+        <p className="text-gray-500 text-lg">Loading editor...</p>
       </div>
     );
   }
@@ -451,205 +241,96 @@ export default function EditorPage() {
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-pink-50 via-white to-purple-50">
-        <div className="text-center" role="alert">
-          <div className="text-4xl mb-3">⚠️</div>
-          <p className="text-red-600 text-lg font-medium">Template not found.</p>
-          <button 
-            onClick={() => router.push('/login')}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-          >
-            Return to Login
-          </button>
-        </div>
+        <p className="text-red-500 text-lg">Template not found.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-pink-50 via-white to-purple-50 py-4 sm:py-8 px-2 sm:px-4">
-      <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+    <div className="min-h-screen bg-linear-to-br from-pink-50 via-white to-purple-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-800 font-serif">
-                ✏️ Template Editor
-              </h1>
-              <div className="flex items-center gap-2 text-sm">
-                {hasUnsavedChanges && (
-                  <span className="flex items-center gap-1 text-amber-600">
-                    <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                    Unsaved changes
-                  </span>
-                )}
-                {autoSaving && (
-                  <span className="flex items-center gap-1 text-blue-600">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    Auto-saving...
-                  </span>
-                )}
-                {!hasUnsavedChanges && !autoSaving && lastSavedData.current && (
-                  <span className="flex items-center gap-1 text-green-600">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    All changes saved
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h1 className="text-2xl font-bold text-gray-800">
+              ✏️ Template Editor
+            </h1>
+            <div className="flex gap-3">
               <button
                 onClick={handleSave}
-                disabled={saving || Object.keys(errors).length > 0}
-                className={`px-4 sm:px-6 py-2.5 rounded-xl font-medium text-sm sm:text-base transition-all duration-200 ${
-                  successAnimation 
-                    ? 'bg-green-500 text-white animate-bounce-in' 
-                    : 'bg-linear-to-r from-pink-500 to-purple-500 text-white hover:from-pink-600 hover:to-purple-600 hover:shadow-lg hover:-translate-y-0.5'
-                } disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
+                disabled={saving}
+                className="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50"
               >
-                {saving ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Saving...
-                  </span>
-                ) : (
-                  "💾 Save"
-                )}
+                {saving ? "Saving..." : "Save"}
               </button>
               <button
                 onClick={handlePublish}
-                disabled={publishing || hasUnsavedChanges || Object.keys(errors).length > 0}
-                className="px-4 sm:px-6 py-2.5 bg-linear-to-r from-emerald-500 to-green-500 text-white rounded-xl hover:from-emerald-600 hover:to-green-600 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none font-medium text-sm sm:text-base"
+                disabled={publishing}
+                className="px-5 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50"
               >
-                {publishing ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Publishing...
-                  </span>
-                ) : (
-                  "🚀 Publish"
-                )}
+                {publishing ? "Publishing..." : "Publish"}
               </button>
-            </div>
-          </div>
-          
-          {/* Validation Errors Summary */}
-          {Object.keys(errors).length > 0 && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <div className="w-5 h-5 text-red-500 shrink-0 mt-0.5">⚠️</div>
-                <div>
-                  <h3 className="text-sm font-medium text-red-800 mb-1">Please fix the following errors:</h3>
-                  <ul className="text-sm text-red-700 space-y-1">
-                    {Object.entries(errors).slice(0, 3).map(([key, error]) => (
-                      <li key={key}>• {error}</li>
-                    ))}
-                    {Object.keys(errors).length > 3 && (
-                      <li className="text-red-600">• And {Object.keys(errors).length - 3} more...</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Keyboard Shortcuts Hint */}
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-2 text-sm text-blue-700">
-              <span>💡</span>
-              <span>
-                <strong>Pro tips:</strong> Press <kbd className="px-2 py-1 bg-white rounded border text-xs">Cmd+S</kbd> to save • 
-                <kbd className="px-2 py-1 bg-white rounded border text-xs ml-1">Cmd+Enter</kbd> to publish • Changes auto-save after 3 seconds
-              </span>
             </div>
           </div>
         </div>
 
         {/* Status message */}
         {message && (
-          <div 
-            className={`rounded-xl p-4 text-sm mx-2 sm:mx-0 transition-all duration-300 ${
-              message.includes('✅') || message.includes('✓') 
-                ? 'bg-green-50 border border-green-200 text-green-800' 
-                : message.includes('⚠️') || message.toLowerCase().includes('error')
-                  ? 'bg-red-50 border border-red-200 text-red-800'
-                  : 'bg-blue-50 border border-blue-200 text-blue-800'
-            }`}
-            role="alert"
-            aria-live="polite"
-          >
-            <div className="flex items-center gap-2">
-              <div className="shrink-0">
-                {message.includes('✅') || message.includes('✓') ? '✅' : 
-                 message.includes('⚠️') || message.toLowerCase().includes('error') ? '⚠️' : 'ℹ️'}
-              </div>
-              <span>{message}</span>
-            </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3 text-sm text-gray-700">
+            {message}
           </div>
         )}
 
         {/* Share link */}
         {shareLink && (
-          <div className="bg-linear-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5 mx-2 sm:mx-0 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">🎉</span>
-              <h3 className="text-lg font-semibold text-green-800">Template Published!</h3>
-            </div>
-            <p className="text-sm text-green-700 mb-3">
-              Your beautiful template is now live! Share this link with others to spread the love.
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-sm font-medium text-green-800 mb-2">
+              🔗 Share Link:
             </p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="flex gap-2">
               <input
                 readOnly
                 value={shareLink}
-                className="flex-1 px-4 py-3 bg-white rounded-lg border border-green-300 text-sm text-gray-700 font-mono select-all focus:outline-none focus:ring-2 focus:ring-green-400"
-                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 px-3 py-2 bg-white rounded border border-green-300 text-sm text-gray-700"
               />
               <button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(shareLink);
-                    setMessage("✅ Link copied to clipboard!");
-                    setTimeout(() => setMessage(""), 2000);
-                  } catch (err) {
-                    setMessage("⚠️ Failed to copy link");
-                  }
-                }}
-                className="px-4 py-3 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition-colors font-medium flex items-center justify-center gap-2"
+                onClick={() => navigator.clipboard.writeText(shareLink)}
+                className="px-3 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition"
               >
-                📋 Copy Link
+                Copy
               </button>
             </div>
           </div>
         )}
 
         {/* Hero Section */}
-        <Section title="✨ Hero Section" subtitle="The first impression that captures hearts">
+        <Section title="Hero Section">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Field label="Her Name" required error={errors.herName}>
+            <Field label="Her Name">
               <input
                 type="text"
                 value={data.herName}
                 onChange={(e) => updateField("herName", e.target.value)}
-                className="editor-input"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter her beautiful name..."
               />
             </Field>
-            <Field label="Headline" required error={errors.heroHeadline}>
+            <Field label="Headline">
               <input
                 type="text"
                 value={data.heroHeadline}
                 onChange={(e) => updateField("heroHeadline", e.target.value)}
-                className="editor-input"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="A powerful headline that celebrates her..."
               />
             </Field>
           </div>
-          <Field label="Subtitle" required error={errors.heroSubtext}>
+          <Field label="Subtitle">
             <input
               type="text"
               value={data.heroSubtext}
               onChange={(e) => updateField("heroSubtext", e.target.value)}
-              className="editor-input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="A heartfelt subtitle that sets the tone..."
             />
           </Field>
@@ -658,43 +339,37 @@ export default function EditorPage() {
               type="text"
               value={data.heroLoading}
               onChange={(e) => updateField("heroLoading", e.target.value)}
-              className="editor-input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Text shown while the magic loads..."
             />
           </Field>
         </Section>
 
         {/* Impact Stats */}
-        <Section title="📊 Impact Stats" subtitle="Powerful numbers that showcase her incredible achievements">
+        <Section title="Impact Stats">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {data.stats.map((stat, i) => (
-              <div
-                key={i}
-                className="bg-linear-to-br from-gray-50 to-gray-100 rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all duration-200"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Stat {i + 1}</h3>
-                  <div className="text-2xl">{stat.emoji}</div>
-                </div>
-                <div className="space-y-4">
+              <div key={i} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h3 className="text-md font-medium text-gray-800 mb-3">Stat {i + 1}</h3>
+                <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Label" required error={errors[`stat_${i}_label`]}>
+                    <Field label="Label">
                       <input
                         type="text"
                         value={stat.label}
                         onChange={(e) => updateStat(i, "label", e.target.value)}
-                        className="editor-input"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="e.g., Lives Impacted"
                       />
                     </Field>
-                    <Field label="Value" required error={errors[`stat_${i}_value`]}>
+                    <Field label="Value">
                       <input
                         type="number"
                         value={stat.value}
                         onChange={(e) =>
                           updateStat(i, "value", parseInt(e.target.value) || 0)
                         }
-                        className="editor-input"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="1000"
                         min="1"
                       />
@@ -706,7 +381,7 @@ export default function EditorPage() {
                         type="text"
                         value={stat.prefix}
                         onChange={(e) => updateStat(i, "prefix", e.target.value)}
-                        className="editor-input"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="e.g., Over"
                       />
                     </Field>
@@ -715,31 +390,8 @@ export default function EditorPage() {
                         type="text"
                         value={stat.suffix}
                         onChange={(e) => updateStat(i, "suffix", e.target.value)}
-                        className="editor-input"
-                        placeholder="e.g., people"
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Emoji">
-                      <input
-                        type="text"
-                        value={stat.emoji}
-                        onChange={(e) => updateStat(i, "emoji", e.target.value)}
-                        className="editor-input text-center text-xl"
-                        maxLength={2}
-                        placeholder="💪"
-                      />
-                    </Field>
-                    <Field label="Display Text (optional)">
-                      <input
-                        type="text"
-                        value={stat.displayText || ""}
-                        onChange={(e) =>
-                          updateStat(i, "displayText", e.target.value)
-                        }
-                        className="editor-input"
-                        placeholder="Custom display text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., +, people"
                       />
                     </Field>
                   </div>
@@ -750,10 +402,10 @@ export default function EditorPage() {
         </Section>
 
         {/* Superpowers */}
-        <Section title="⭐ Superpowers" subtitle="Her unique strengths and amazing abilities that make her shine">
+        <Section title="Superpowers">
           <div className="space-y-4">
             {data.superpowers.map((power, i) => (
-              <div key={i} className="bg-linear-to-r from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-100 hover:shadow-md transition-all duration-200">
+              <div key={i} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   <div className="flex flex-col items-center gap-2">
                     <label className="text-sm font-medium text-gray-600">Icon:</label>
@@ -761,17 +413,17 @@ export default function EditorPage() {
                       type="text"
                       value={power.icon}
                       onChange={(e) => updateSuperpower(i, 'icon', e.target.value)}
-                      className="w-16 h-16 text-center text-2xl border-2 border-purple-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400"
+                      className="w-16 h-16 text-center text-2xl border-2 border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       maxLength={2}
                       placeholder="💪"
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <Field label={`Superpower ${i + 1}`} required error={errors[`power_${i}_text`]}>
+                  <div className="flex-1">
+                    <Field label={`Superpower ${i + 1}`}>
                       <textarea
                         value={power.text}
                         onChange={(e) => updateSuperpower(i, 'text', e.target.value)}
-                        className="editor-input min-h-20 resize-y"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-20 resize-y"
                         placeholder="Describe her amazing superpower..."
                         rows={2}
                       />
@@ -800,7 +452,7 @@ export default function EditorPage() {
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
-                    <Field label="Memory Description" required error={errors[`memory_${i}_text`]}>
+                    <Field label="Memory Description" required={true} error={errors[`memory_${i}_text`]}>
                       <textarea
                         value={memory.text}
                         onChange={(e) => updateMemoryText(i, e.target.value)}
@@ -851,7 +503,8 @@ export default function EditorPage() {
                                 updated.memories = [...updated.memories];
                                 updated.memories[i] = { ...updated.memories[i], photo: '' };
                                 setData(updated);
-                                setHasUnsavedChanges(true);
+                                setMessage("Image removed successfully!");
+                                setTimeout(() => setMessage(""), 3000);
                               }}
                               className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full text-sm flex items-center justify-center hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
                               type="button"
@@ -865,6 +518,7 @@ export default function EditorPage() {
                             <div className="text-center text-gray-500">
                               <div className="text-4xl mb-2">📷</div>
                               <p className="text-sm">No image uploaded</p>
+                              <p className="text-xs text-gray-400 mt-1">Click below to add an image</p>
                             </div>
                           </div>
                         )}
@@ -877,8 +531,8 @@ export default function EditorPage() {
                               onChange={(e) => {
                                 const currentImages = data.memories.filter(m => m.photo).length;
                                 if (currentImages >= 3 && !memory.photo) {
-                                  setMessage("⚠️ Maximum 3 images allowed total.");
-                                  setTimeout(() => setMessage(""), 3000);
+                                  setMessage("⚠️ Maximum 3 images allowed total. Please remove an existing image first.");
+                                  setTimeout(() => setMessage(""), 4000);
                                   return;
                                 }
                                 handleImageUpload(e, i);
@@ -893,9 +547,10 @@ export default function EditorPage() {
                               Uploading image...
                             </div>
                           )}
-                          <p className="text-xs text-gray-500">
-                            💡 Tip: Upload images under 1MB for best performance
-                          </p>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            <p>💡 Tip: Upload images under 1MB for best performance</p>
+                            <p>📊 Images used: {data.memories.filter(m => m.photo).length} / 3 maximum</p>
+                          </div>
                         </div>
                       </div>
                     </Field>
@@ -909,7 +564,7 @@ export default function EditorPage() {
         {/* Final Section */}
         <Section title="🎉 Final Celebration" subtitle="The grand finale that leaves everyone inspired">
           <div className="space-y-6">
-            <Field label="Final Message" required>
+            <Field label="Final Message" required={true}>
               <input
                 type="text"
                 value={data.finalMessage}
@@ -940,37 +595,6 @@ export default function EditorPage() {
             </Field>
           </div>
         </Section>
-
-        {/* Floating Action Button */}
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
-          {/* Progress Ring */}
-          {(saving || autoSaving || publishing) && (
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-purple-500 shadow-lg"></div>
-          )}
-          
-          {/* Quick Save Button */}
-          {hasUnsavedChanges && !autoSaving && (
-            <button
-              onClick={handleSave}
-              disabled={saving || Object.keys(errors).length > 0}
-              className="w-12 h-12 bg-linear-to-r from-pink-500 to-purple-500 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center text-lg disabled:opacity-50 disabled:scale-100"
-              title="Quick Save (Cmd+S)"
-            >
-              💾
-            </button>
-          )}
-          
-          {/* Publish Button */}
-          {!hasUnsavedChanges && !publishing && Object.keys(errors).length === 0 && (
-            <button
-              onClick={handlePublish}
-              className="w-12 h-12 bg-linear-to-r from-emerald-500 to-green-500 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center text-lg"
-              title="Publish Template (Cmd+Enter)"
-            >
-              🚀
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -986,13 +610,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 space-y-6 hover:shadow-md transition-shadow duration-200">
-      <div className="border-b border-gray-100 pb-4">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 font-serif mb-1">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 space-y-4">
+      <div className="border-b border-gray-100 pb-2">
+        <h2 className="text-lg font-semibold text-gray-800">
           {title}
         </h2>
         {subtitle && (
-          <p className="text-sm text-gray-600">{subtitle}</p>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
         )}
       </div>
       {children}
@@ -1002,39 +626,24 @@ function Section({
 
 function Field({
   label,
-  children,
+  required,
   error,
-  required = false,
+  children,
 }: {
   label: string;
-  children: React.ReactNode;
-  error?: string;
   required?: boolean;
+  error?: string;
+  children: React.ReactNode;
 }) {
-  const fieldId = `field-${label.toLowerCase().replace(/\s+/g, '-')}`;
-  
   return (
     <div>
-      <label 
-        className={`block text-sm font-medium mb-2 ${
-          error ? 'text-red-600' : 'text-gray-700'
-        }`}
-      >
+      <label className="block text-sm font-medium text-gray-700 mb-1">
         {label}
-        {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
+        {required && <span className="text-red-500 ml-1">*</span>}
       </label>
-      <div className={`${error ? 'ring-2 ring-red-200 rounded-lg' : ''}`}>
-        {children}
-      </div>
+      {children}
       {error && (
-        <p 
-          className="mt-1 text-sm text-red-600 flex items-center gap-1" 
-          role="alert"
-          aria-live="polite"
-        >
-          <span className="text-red-500">⚠️</span>
-          {error}
-        </p>
+        <p className="text-red-500 text-xs mt-1">{error}</p>
       )}
     </div>
   );

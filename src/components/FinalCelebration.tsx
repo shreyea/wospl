@@ -76,7 +76,7 @@ export default function FinalCelebration(props: FinalCelebrationProps) {
   return (
     <section
       id="final-celebration"
-      className="relative min-h-[100dvh] py-16 sm:py-20 px-5 overflow-hidden flex flex-col items-center justify-center"
+      className="relative min-h-dvh py-16 sm:py-20 px-5 overflow-hidden flex flex-col items-center justify-center"
       style={{
         background:
           "linear-gradient(180deg, #FFF8FA 0%, #fff0f4 20%, #ffe8f0 50%, #ffd8e8 75%, #FFC6D3 100%)",
