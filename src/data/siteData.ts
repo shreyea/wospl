@@ -7,7 +7,7 @@ export const siteData = {
   herName: "ESHA",
 
   // --- HERO ---
-  heroHeadline: "Happy Women's Day to My Favorite Human",
+  heroHeadline: "ESHA! Happy Women's Day 💕", 
   heroSubtext:
     "Today we celebrate the amazing woman who makes my life brighter.",
   heroLoading: "Analyzing your impact on my life…",
